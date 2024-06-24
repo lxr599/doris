@@ -2626,6 +2626,21 @@ public:
         _is_shared = false;
         _bitmap = nullptr;
     }
+
+    void clear() {
+        _set.clear();
+        if (_type != EMPTY) {
+            if (_bitmap != nullptr) {
+                if (_bitmap.use_count() <= 1) {
+                    _bitmap->clear();
+                } else {
+                    _bitmap.reset();
+                }
+            }
+            _sv = 0;
+            _type = EMPTY;
+        }
+    }
     // Implement an iterator for convenience
     friend class BitmapValueIterator;
     typedef BitmapValueIterator b_iterator;

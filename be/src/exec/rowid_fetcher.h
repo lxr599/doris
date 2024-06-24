@@ -29,7 +29,8 @@
 #include "exec/tablet_info.h" // DorisNodesInfo
 #include "vec/core/block.h"
 #include "vec/data_types/data_type.h"
-
+#include "vec/row_codec/row_codec_base.h"
+#include "vec/row_codec/row_codec_v2.h"
 namespace doris {
 
 class DorisNodesInfo;

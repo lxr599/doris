@@ -65,6 +65,7 @@ void JsonbSerializeUtil::block_to_jsonb(const TabletSchema& schema, const Block&
         }
         jsonb_writer.writeEndObject();
         dst.insert_data(jsonb_writer.getOutput()->getBuffer(), jsonb_writer.getOutput()->getSize());
+        LOG_EVERY_N(INFO, 10000) << "jsonb size: " << jsonb_writer.getOutput()->getSize();
     }
 }
 

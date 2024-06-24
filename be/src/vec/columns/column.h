@@ -638,6 +638,11 @@ public:
         return 0;
     }
 
+    virtual size_t row_encode_size() const {
+        LOG(FATAL) << fmt::format("row_encode_size of column {} are not implemented.", get_name());
+        return 0;
+    }
+
     /// Returns ratio of values in column, that are equal to default value of column.
     /// Checks only @sample_ratio ratio of rows.
     virtual double get_ratio_of_default_rows(double sample_ratio = 1.0) const {

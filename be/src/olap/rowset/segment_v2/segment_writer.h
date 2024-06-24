@@ -41,6 +41,8 @@
 #include "olap/tablet_schema.h"
 #include "util/faststring.h"
 #include "util/slice.h"
+#include "vec/row_codec/row_codec_base.h"
+#include "vec/row_codec/row_codec_v2.h"
 
 namespace doris {
 namespace vectorized {

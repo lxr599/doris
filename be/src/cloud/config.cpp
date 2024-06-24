@@ -57,4 +57,6 @@ DEFINE_mInt32(mow_stream_load_commit_retry_times, "10");
 
 DEFINE_mInt32(sync_load_for_tablets_thread, "32");
 
+DEFINE_String(row_store_format, "V1");
+
 } // namespace doris::config

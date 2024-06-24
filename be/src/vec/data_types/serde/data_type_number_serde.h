@@ -63,6 +63,11 @@ public:
                                       FormatOptions& options) const override;
     Status serialize_column_to_json(const IColumn& column, int start_idx, int end_idx,
                                     BufferWritable& bw, FormatOptions& options) const override;
+    
+    void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const override;
+
+    void row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const override;
+
     Status deserialize_one_cell_from_json(IColumn& column, Slice& slice,
                                           const FormatOptions& options) const override;
 
@@ -99,6 +104,19 @@ public:
                                   int row_num) const override;
     Status read_one_cell_from_json(IColumn& column, const rapidjson::Value& result) const override;
 
+    template<typename D>
+    void decode_val(ColumnType& col, const char* dst, int len) const {
+        D val = 0;
+        memcpy(&val, dst, len);
+        col.insert_value(val);
+    }
+
+    template<typename D>
+    void append_to_buff(std::string* dst, const StringRef& data_ref) const {
+        D val = *reinterpret_cast<const D*>(data_ref.data);
+        dst->append(reinterpret_cast<const char*>(&val), sizeof(val));
+    }
+    
 private:
     template <bool is_binary_format>
     Status _write_column_to_mysql(const IColumn& column, MysqlRowBuffer<is_binary_format>& result,
@@ -253,6 +271,34 @@ void DataTypeNumberSerDe<T>::read_one_cell_from_jsonb(IColumn& column,
                                "read_one_cell_from_jsonb with type '{}'", arg->typeName());
     }
 }
+
+
+
+template <typename T>
+void DataTypeNumberSerDe<T>::row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const {
+    auto& col = reinterpret_cast<ColumnType&>(column);
+    if constexpr (std::is_same_v<T, Int8> || std::is_same_v<T, UInt8>) {
+        decode_val<int8_t>(col, dst, len);
+    } else if constexpr (std::is_same_v<T, Int16> || std::is_same_v<T, UInt16>) {
+        decode_val<int16_t>(col, dst, len);    
+    } else if constexpr (std::is_same_v<T, Int32> || std::is_same_v<T, UInt32>) {
+        int32_t val = 0;
+        memcpy(&val, dst, len);
+        decode_val<int32_t>(col, dst, len);
+    } else if constexpr (std::is_same_v<T, Int64> || std::is_same_v<T, UInt64>) {
+        decode_val<int64_t>(col, dst, len);
+    } else if constexpr (std::is_same_v<T, Int128>) {
+        decode_val<__int128_t>(col, dst, len);
+    } else if constexpr (std::is_same_v<T, float>) {
+        decode_val<float>(col, dst, len);
+    } else if constexpr (std::is_same_v<T, double>) {
+        decode_val<double>(col, dst, len);
+    } else {
+        throw doris::Exception(ErrorCode::NOT_IMPLEMENTED_ERROR,
+                               "read_one_cell_from_jsonb");
+    }
+}
+
 template <typename T>
 void DataTypeNumberSerDe<T>::write_one_cell_to_jsonb(const IColumn& column,
                                                      JsonbWriterT<JsonbOutStream>& result,
@@ -288,6 +334,31 @@ void DataTypeNumberSerDe<T>::write_one_cell_to_jsonb(const IColumn& column,
     } else {
         throw doris::Exception(ErrorCode::NOT_IMPLEMENTED_ERROR,
                                "write_one_cell_to_jsonb with type " + column.get_name());
+    }
+}
+
+template <typename T>
+void DataTypeNumberSerDe<T>::row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const {
+    StringRef data_ref = column.get_data_at(row_num);
+    // auto data_size = data_ref.size;
+    size = sizeof(T);
+    if constexpr (std::is_same_v<T, Int8> || std::is_same_v<T, UInt8>) {
+        append_to_buff<int8_t>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Int16> || std::is_same_v<T, UInt16>) {
+        append_to_buff<int16_t>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Int32> || std::is_same_v<T, UInt32>) {
+        append_to_buff<int32_t>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Int64> || std::is_same_v<T, UInt64>) {
+        append_to_buff<int64_t>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Int128>) {
+        append_to_buff<__int128_t>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, float>) {
+        append_to_buff<float>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, double>) {
+        append_to_buff<double>(dst, data_ref);
+    } else {
+        throw doris::Exception(ErrorCode::NOT_IMPLEMENTED_ERROR,
+                               "row_codec_v2_serialize with type " + column.get_name());
     }
 }
 

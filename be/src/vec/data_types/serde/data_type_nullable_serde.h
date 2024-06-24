@@ -94,6 +94,10 @@ public:
                                   int row_num) const override;
     Status read_one_cell_from_json(IColumn& column, const rapidjson::Value& result) const override;
 
+    void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const override;
+
+//     void row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const override;
+
 private:
     template <bool is_binary_format>
     Status _write_column_to_mysql(const IColumn& column, MysqlRowBuffer<is_binary_format>& result,

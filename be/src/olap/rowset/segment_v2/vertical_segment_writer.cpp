@@ -294,8 +294,18 @@ void VerticalSegmentWriter::_serialize_block_to_row_column(vectorized::Block& bl
     row_store_column->clear();
     vectorized::DataTypeSerDeSPtrs serdes =
             vectorized::create_data_type_serdes(block.get_data_types());
-    vectorized::JsonbSerializeUtil::block_to_jsonb(*_tablet_schema, block, *row_store_column,
-                                                   _tablet_schema->num_columns(), serdes);
+            
+    if (config::row_store_format == "V1") {
+        vectorized::JsonbSerializeUtil::block_to_jsonb(*_tablet_schema, block, *row_store_column,
+                                                    _tablet_schema->num_columns(), serdes);
+    } else if (config::row_store_format == "V2") {
+        // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+        vectorized::RowCodecV2::row_encode(*_tablet_schema, block, *row_store_column,
+                          _tablet_schema->num_columns(), serdes);
+    } else {
+        LOG(ERROR) << "unsupported row store format: " << config::row_store_format;
+    }
+   
     VLOG_DEBUG << "serialize , num_rows:" << block.rows() << ", row_column_id:" << row_column_id
                << ", total_byte_size:" << block.allocated_bytes() << ", serialize_cost(us)"
                << watch.elapsed_time() / 1000;

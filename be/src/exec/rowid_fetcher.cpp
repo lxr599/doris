@@ -166,9 +166,24 @@ Status RowIDFetcher::_merge_rpc_results(const PMultiGetRequest& request,
                 }
             }
             for (int i = 0; i < resp.binary_row_data_size(); ++i) {
-                vectorized::JsonbSerializeUtil::jsonb_to_block(
-                        serdes, resp.binary_row_data(i).data(), resp.binary_row_data(i).size(),
-                        col_uid_to_idx, *output_block, default_values);
+                // vectorized::JsonbSerializeUtil::jsonb_to_block(
+                //         serdes, resp.binary_row_data(i).data(), resp.binary_row_data(i).size(),
+                //         col_uid_to_idx, *output_block, default_values);
+
+                if (config::row_store_format == "V1") {
+                LOG(INFO) << "decode with row store format V1";
+                    vectorized::JsonbSerializeUtil::jsonb_to_block(
+                            serdes, resp.binary_row_data(i).data(), resp.binary_row_data(i).size(),
+                            col_uid_to_idx, *output_block, default_values);
+                } else if (config::row_store_format == "V2") {
+                    LOG(INFO) << "decode with row store format V2";
+                    // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+                    vectorized::RowCodecV2::row_decode(
+                            serdes, resp.binary_row_data(i).data(), resp.binary_row_data(i).size(),
+                            col_uid_to_idx, *output_block, default_values);
+                } else {
+                    LOG(ERROR) << "unknown row store format: " << config::row_store_format;
+                }
             }
             return Status::OK();
         }

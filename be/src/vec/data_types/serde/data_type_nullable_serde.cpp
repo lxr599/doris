@@ -247,6 +247,16 @@ void DataTypeNullableSerDe::write_one_cell_to_jsonb(const IColumn& column, Jsonb
                                           col_id, row_num);
 }
 
+void DataTypeNullableSerDe::row_codec_v2_serialize(const IColumn& column, int row_num,
+                                                   std::string* dst, int& size) const {
+    auto& nullable_col = assert_cast<const ColumnNullable&>(column);
+    if (nullable_col.is_null_at(row_num)) {
+        // do not insert to jsonb
+        return;
+    }
+    nested_serde->row_codec_v2_serialize(nullable_col.get_nested_column(), row_num, dst, size);
+}
+
 void DataTypeNullableSerDe::read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const {
     auto& col = reinterpret_cast<ColumnNullable&>(column);
     if (!arg || arg->isNull()) {
@@ -257,6 +267,10 @@ void DataTypeNullableSerDe::read_one_cell_from_jsonb(IColumn& column, const Json
     auto& null_map_data = col.get_null_map_data();
     null_map_data.push_back(0);
 }
+
+// void DataTypeNullableSerDe::row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const {
+
+// }
 
 /**nullable serialize to arrow
    1/ convert the null_map from doris to arrow null byte map

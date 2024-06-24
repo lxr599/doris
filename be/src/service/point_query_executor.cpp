@@ -331,11 +331,24 @@ Status PointQueryExecutor::_lookup_row_data() {
     SCOPED_TIMER(&_profile_metrics.lookup_data_ns);
     for (size_t i = 0; i < _row_read_ctxs.size(); ++i) {
         if (_row_read_ctxs[i]._cached_row_data.valid()) {
-            vectorized::JsonbSerializeUtil::jsonb_to_block(
+            if (config::row_store_format == "V1") {
+                LOG(INFO) << "decode with row store format V1";
+                vectorized::JsonbSerializeUtil::jsonb_to_block(
                     _reusable->get_data_type_serdes(),
                     _row_read_ctxs[i]._cached_row_data.data().data,
                     _row_read_ctxs[i]._cached_row_data.data().size, _reusable->get_col_uid_to_idx(),
                     *_result_block, _reusable->get_col_default_values());
+            } else if (config::row_store_format == "V2") {
+                LOG(INFO) << "decode with row store format V2";
+                // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+                vectorized::RowCodecV2::row_decode(_reusable->get_data_type_serdes(),
+                                  _row_read_ctxs[i]._cached_row_data.data().data,
+                                  _row_read_ctxs[i]._cached_row_data.data().size, _reusable->get_col_uid_to_idx(),
+                                  *_result_block, _reusable->get_col_default_values());
+            } else {
+                LOG(ERROR) << "unknown row store format: " << config::row_store_format;
+            }
+
             continue;
         }
         if (!_row_read_ctxs[i]._row_location.has_value()) {
@@ -348,10 +361,23 @@ Status PointQueryExecutor::_lookup_row_data() {
                 _profile_metrics.read_stats, value,
                 !config::disable_storage_row_cache /*whether write row cache*/));
         // serilize value to block, currently only jsonb row formt
-        vectorized::JsonbSerializeUtil::jsonb_to_block(
-                _reusable->get_data_type_serdes(), value.data(), value.size(),
-                _reusable->get_col_uid_to_idx(), *_result_block,
-                _reusable->get_col_default_values());
+        if (config::row_store_format == "V1") {
+            LOG(INFO) << "decode with row store format V1";
+            vectorized::JsonbSerializeUtil::jsonb_to_block(
+                    _reusable->get_data_type_serdes(),
+                    _row_read_ctxs[i]._cached_row_data.data().data,
+                    _row_read_ctxs[i]._cached_row_data.data().size, _reusable->get_col_uid_to_idx(),
+                    *_result_block, _reusable->get_col_default_values());
+        } else if (config::row_store_format == "V2") {
+            LOG(INFO) << "decode with row store format V2";
+            // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+            vectorized::RowCodecV2::row_decode(
+                    _reusable->get_data_type_serdes(), value.data(), value.size(),
+                    _reusable->get_col_uid_to_idx(), *_result_block,
+                    _reusable->get_col_default_values());
+        } else {
+            LOG(ERROR) << "unknown row store format: " << config::row_store_format;
+        }
     }
     return Status::OK();
 }

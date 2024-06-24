@@ -247,7 +247,15 @@ public:
     virtual void write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result,
                                          Arena* mem_pool, int32_t col_id, int row_num) const = 0;
 
+    virtual void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const {
+        LOG(FATAL) << "row_codec_v2_serialize of " << column.get_name() << "not supported";
+    }
+
     virtual void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const = 0;
+
+    virtual void row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const {
+        LOG(FATAL) << "row_codec_v2_deserialize of " << column.get_name() << "not supported";
+    }
 
     // MySQL serializer and deserializer
     virtual Status write_column_to_mysql(const IColumn& column, MysqlRowBuffer<false>& row_buffer,

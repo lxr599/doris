@@ -149,6 +149,17 @@ public:
         result.writeEndBinary();
     }
 
+    void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const override {
+        const auto& data_ref = column.get_data_at(row_num);
+        size = data_ref.size;
+        dst->append(data_ref.data, data_ref.size);  // append string data
+    }
+
+    void row_codec_v2_deserialize(IColumn& column, const char* dst, int len) const override {
+        assert_cast<ColumnType&>(column).insert_data(dst, len);
+    }
+
+
     void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const override {
         assert(arg->isBinary());
         const auto* blob = static_cast<const JsonbBlobVal*>(arg);

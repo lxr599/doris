@@ -53,6 +53,8 @@
 #include "vec/core/block.h"
 #include "vec/data_types/serde/data_type_serde.h"
 #include "vec/exprs/vexpr_fwd.h"
+#include "vec/row_codec/row_codec_base.h"
+#include "vec/row_codec/row_codec_v2.h"
 
 namespace doris {
 

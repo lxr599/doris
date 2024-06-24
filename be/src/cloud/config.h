@@ -91,4 +91,6 @@ DECLARE_mInt32(mow_stream_load_commit_retry_times);
 // the theads which sync the datas which loaded in other clusters
 DECLARE_mInt32(sync_load_for_tablets_thread);
 
+// row store format version: v1, v2
+DECLARE_String(row_store_format);
 } // namespace doris::config
