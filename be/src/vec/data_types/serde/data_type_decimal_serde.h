@@ -36,6 +36,7 @@
 #include "vec/common/string_ref.h"
 #include "vec/core/types.h"
 #include "vec/core/wide_integer.h"
+#include "vec/row_codec/row_codec_utils.h"
 
 namespace doris {
 
@@ -94,7 +95,9 @@ public:
 
     void write_one_cell_to_jsonb(const IColumn& column, JsonbWriter& result, Arena* mem_pool,
                                  int32_t col_id, int row_num) const override;
-
+    
+    void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const override;
+    
     void read_one_cell_from_jsonb(IColumn& column, const JsonbValue* arg) const override;
 
     void write_column_to_arrow(const IColumn& column, const NullMap* null_map,
@@ -197,6 +200,30 @@ void DataTypeDecimalSerDe<T>::write_one_cell_to_jsonb(const IColumn& column, Jso
                                "write_one_cell_to_jsonb with type " + column.get_name());
     }
 }
+
+template <typename T>
+void DataTypeDecimalSerDe<T>::row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const {
+    StringRef data_ref = column.get_data_at(row_num);
+    // auto data_size = data_ref.size;
+    size = sizeof(T);
+    if constexpr (std::is_same_v<T, Decimal<Int128>>) {
+        append_to_buff<Decimal128V2::NativeType>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Decimal128V3>) {
+        append_to_buff<Decimal128V3::NativeType>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Decimal<Int32>>) {
+        append_to_buff<Decimal32::NativeType>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Decimal<Int64>>) {
+        append_to_buff<Decimal64::NativeType>(dst, data_ref);
+    } else if constexpr (std::is_same_v<T, Decimal256>) {
+        size = data_ref.size;
+        // memcpy(dst, data_ref.data, size);
+        dst->append(data_ref.data, data_ref.size);  // append string data
+    } else {
+        throw doris::Exception(ErrorCode::NOT_IMPLEMENTED_ERROR,
+                               "row_codec_v2_serialize with type " + column.get_name());
+    }
+}
+
 
 template <typename T>
 void DataTypeDecimalSerDe<T>::read_one_cell_from_jsonb(IColumn& column,

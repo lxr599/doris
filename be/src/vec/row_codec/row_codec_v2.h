@@ -31,20 +31,20 @@ namespace doris::vectorized {
 //     std::vector<int16_t> _col_id_16;
 // };
 
-class RowCodecV2 {
+class RowCodecV2 : public RowCodec{
 public:
     RowCodecV2() {}
 
     ~RowCodecV2() = default;
 
-    static void row_encode(const TabletSchema& schema, const Block& block, ColumnString& dst,
+     void row_encode(const TabletSchema& schema, const Block& block, ColumnString& dst,
                                int num_cols, const DataTypeSerDeSPtrs& serdes);
     // batch rows
-    static void rows_decode(const DataTypeSerDeSPtrs& serdes, const ColumnString& row_store_col,
+     void rows_decode(const DataTypeSerDeSPtrs& serdes, const ColumnString& row_store_col,
                                const std::unordered_map<uint32_t, uint32_t>& col_id_to_idx,
                                Block& dst, const std::vector<std::string>& default_values);
     // single row
-    static void row_decode(const DataTypeSerDeSPtrs& serdes, const char* data, size_t size,
+     void row_decode(const DataTypeSerDeSPtrs& serdes, const char* data, size_t size,
                                const std::unordered_map<uint32_t, uint32_t>& col_id_to_idx,
                                Block& dst, const std::vector<std::string>& default_values);
     

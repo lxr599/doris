@@ -177,8 +177,9 @@ Status RowIDFetcher::_merge_rpc_results(const PMultiGetRequest& request,
                             col_uid_to_idx, *output_block, default_values);
                 } else if (config::row_store_format == "V2") {
                     LOG(INFO) << "decode with row store format V2";
-                    // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
-                    vectorized::RowCodecV2::row_decode(
+                    vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+                    // vectorized::RowCodecV2::
+                    row_codec->row_decode(
                             serdes, resp.binary_row_data(i).data(), resp.binary_row_data(i).size(),
                             col_uid_to_idx, *output_block, default_values);
                 } else {

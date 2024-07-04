@@ -329,6 +329,7 @@ Status PointQueryExecutor::_lookup_row_key() {
 Status PointQueryExecutor::_lookup_row_data() {
     // 3. get values
     SCOPED_TIMER(&_profile_metrics.lookup_data_ns);
+    vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
     for (size_t i = 0; i < _row_read_ctxs.size(); ++i) {
         if (_row_read_ctxs[i]._cached_row_data.valid()) {
             if (config::row_store_format == "V1") {
@@ -340,8 +341,8 @@ Status PointQueryExecutor::_lookup_row_data() {
                     *_result_block, _reusable->get_col_default_values());
             } else if (config::row_store_format == "V2") {
                 LOG(INFO) << "decode with row store format V2";
-                // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
-                vectorized::RowCodecV2::row_decode(_reusable->get_data_type_serdes(),
+                // vectorized::RowCodecV2::
+                row_codec->row_decode(_reusable->get_data_type_serdes(),
                                   _row_read_ctxs[i]._cached_row_data.data().data,
                                   _row_read_ctxs[i]._cached_row_data.data().size, _reusable->get_col_uid_to_idx(),
                                   *_result_block, _reusable->get_col_default_values());
@@ -371,7 +372,8 @@ Status PointQueryExecutor::_lookup_row_data() {
         } else if (config::row_store_format == "V2") {
             LOG(INFO) << "decode with row store format V2";
             // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
-            vectorized::RowCodecV2::row_decode(
+            // vectorized::RowCodecV2::
+            row_codec->row_decode(
                     _reusable->get_data_type_serdes(), value.data(), value.size(),
                     _reusable->get_col_uid_to_idx(), *_result_block,
                     _reusable->get_col_default_values());

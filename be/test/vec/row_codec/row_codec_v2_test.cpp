@@ -74,10 +74,10 @@ namespace doris::vectorized {
 TEST(RowCodecTest, vector_encode) {
     std::vector<int32_t> vec = {1, 2, 3, 4, 5};
     std::string vector_str;
-    RowCodecV2::encode_col_offet(&vec, &vector_str);
+    RowCodecV2::encode_vec(&vec, &vector_str);
     std::vector<int32_t> vec_decode;
     size_t size;
-    RowCodecV2::decode_cids(&vec_decode, vector_str.c_str(), size);
+    RowCodecV2::decode_vec(&vec_decode, vector_str.c_str(), size);
 
     EXPECT_EQ(vec.size(), vec_decode.size());
     for (int i = 0; i < vec.size(); ++i) {

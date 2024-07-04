@@ -35,6 +35,7 @@
 #include "vec/columns/column_vector.h"
 #include "vec/common/string_ref.h"
 #include "vec/core/types.h"
+#include "vec/row_codec/row_codec_utils.h"
 
 namespace doris {
 class JsonbOutStream;
@@ -111,11 +112,6 @@ public:
         col.insert_value(val);
     }
 
-    template<typename D>
-    void append_to_buff(std::string* dst, const StringRef& data_ref) const {
-        D val = *reinterpret_cast<const D*>(data_ref.data);
-        dst->append(reinterpret_cast<const char*>(&val), sizeof(val));
-    }
     
 private:
     template <bool is_binary_format>

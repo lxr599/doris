@@ -22,6 +22,7 @@
 #include "util/bitmap_value.h"
 #include "olap/olap_common.h"
 #include "row_codec_v2.h"
+#include "row_codec_utils.h"
 
 namespace doris::vectorized {
     size_t RowCodecV2::fixed_data_size(const Block& block, int num_cols) {
@@ -42,23 +43,28 @@ namespace doris::vectorized {
         // auto fixed_size = fixed_data_size(block, num_cols);
         assert(num_cols <= block.columns());
         std::string row_string;
-        std::string data_buff;   // data buffer
+        std::string fixed_data_buff;   // data buffer
+        std::string var_data_buff;
         // uint8_t flag = 0;
-        std::vector<int16_t> null_bitmap;
+        BitmapValue null_bitmap;
 
         // [0, 3, 4, 6]
         std::vector<int16_t> col_offset;
         
         for (int i = 0; i < num_rows; ++i) {
             row_string.clear();
-            data_buff.clear();
+            fixed_data_buff.clear();
+            var_data_buff.clear();
             null_bitmap.clear();
             col_offset.clear();
-            // char fixed_data[fixed_size];
-            int16_t offset = 0;
+
+            fixed_data_buff.reserve(fixed_data_size(block, num_cols));
+            // auto fixed_dst = fixed_data_buff.data();
+
             for (int j = 0; j < num_cols; ++j) {
                 const auto& column = block.get_by_position(j).column;
                 const auto& tablet_column = *schema.columns()[j];
+                // LOG(INFO) << "col name: " << tablet_column.name() << ", col type: " << static_cast<int>(tablet_column.type());
                 if (tablet_column.is_row_store_column()) {
                     // ignore dst row store column
                     continue;
@@ -69,24 +75,32 @@ namespace doris::vectorized {
                 if (column->is_null_at(i)) {
                     LOG(INFO) << "null col id: " << col_id;
                     null_bitmap.add(col_id);
-                    col_offset.emplace_back(0);
-                    col_offset.emplace_back(-1);
                 } else {
-                    int val_len = 0;
-                    col_offset.emplace_back(offset);
-                    serdes[j]->row_codec_v2_serialize(*column, i, &data_buff, val_len);
-                    offset += (val_len - 1);
-                    col_offset.emplace_back(offset);
-                    ++offset;
+                    int size = 0;
+                    if (column->is_variable_length()) {
+                        serdes[j]->row_codec_v2_serialize(*column, i, &var_data_buff, size);
+                        col_offset.emplace_back(size);
+                    } else {
+                        // std::pair<int, int> num_in_type = 
+                        //     schema.get_field_type_interval(block.get_by_position(j).type->get_storage_field_type());
+                        serdes[j]->row_codec_v2_serialize(*column, i, &fixed_data_buff, size);
+                    }
                 }
             }
             // append a row
             row_string.push_back(RowCodecVersion::V_2); // append version
+            auto version_size = sizeof(RowCodecVersion::V_2);
             RowCodecV2::encode_bitmap(&null_bitmap, &row_string);    // append bitmap
+            auto bitmap_size = row_string.size() - version_size;
             RowCodecV2::encode_col_offet(&col_offset, &row_string);  // append not null ids
-            row_string.append(data_buff);   // append data
+            auto col_offset_size = row_string.size() - version_size - bitmap_size;
+            row_string.append(fixed_data_buff);   // append data
+            row_string.append(var_data_buff);     // append var data
+            LOG_EVERY_N(INFO, 10000) << "row store size: " << row_string.size() 
+            << ", version_size: " << version_size << ", bitmap_size: " << bitmap_size
+            << ", col_offset_size: " << col_offset_size 
+            << ", fixed data size: " << fixed_data_buff.size() << ", var data size: " << var_data_buff.size();
             dst.insert_data(row_string.data(), row_string.size());
-            LOG_EVERY_N(INFO, 10000) << "row store size: " << row_string.size() << ", data size: " << data_buff.size();
         }
     }
 
@@ -126,8 +140,10 @@ namespace doris::vectorized {
             auto col_idx = it->second;
             int16_t col_val_size = col_offset[col_idx * 2 + 1] - col_offset[col_idx * 2] + 1;
             if (null_bitmap.contains(col_id)) {
+                ColumnNullable* nullable_column = assert_cast<ColumnNullable*>(dst_column.get());
                 // assert_cast<ColumnNullable*>(dst_column)->insert_default();
-                dst_column->insert_default();
+                nullable_column->insert_default();
+                // dst_column->insert_default();
             } else if (col_val_size || (!null_bitmap.contains(col_id) && col_val_size == 0)) {
                 // LOG(INFO) << "col_offset begin: " << col_offset[col_idx * 2] << ", end: " << col_offset[col_idx * 2 + 1];
                 serdes[col_idx]->row_codec_v2_deserialize(*dst_column, pdata + col_offset[col_idx * 2], col_val_size);
@@ -143,14 +159,9 @@ namespace doris::vectorized {
         int32_t size = bitmap->getSizeInBytes();
         dst->append(reinterpret_cast<const char*>(&size), sizeof(size)); // append bitmap length
 
-        // std::vector<char> bitmap_str(size);
-        // bitmap->write_to(bitmap_str.data());
-        std::string bitmap_value;
-        bitmap_value.resize(size);
-        char* bitmap_value_offset = &bitmap_value[0];
-        bitmap->write_to(bitmap_value_offset);
-        // dst->append(bitmap_str.begin(), bitmap_str.end());
-        dst->append(bitmap_value_offset, size);
+        std::vector<char> bitmap_str(size);
+        bitmap->write_to(bitmap_str.data());
+        dst->append(bitmap_str.begin(), bitmap_str.end());
     }
 
     void RowCodecV2::encode_col_offet(std::vector<int16_t>* col_ids, std::string* dst) {

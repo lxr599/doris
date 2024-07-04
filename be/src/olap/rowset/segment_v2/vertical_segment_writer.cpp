@@ -299,8 +299,9 @@ void VerticalSegmentWriter::_serialize_block_to_row_column(vectorized::Block& bl
         vectorized::JsonbSerializeUtil::block_to_jsonb(*_tablet_schema, block, *row_store_column,
                                                     _tablet_schema->num_columns(), serdes);
     } else if (config::row_store_format == "V2") {
-        // vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
-        vectorized::RowCodecV2::row_encode(*_tablet_schema, block, *row_store_column,
+        vectorized::RowCodec* row_codec = new vectorized::RowCodecV2();
+        // vectorized::RowCodecV2::
+        row_codec->row_encode(*_tablet_schema, block, *row_store_column,
                           _tablet_schema->num_columns(), serdes);
     } else {
         LOG(ERROR) << "unsupported row store format: " << config::row_store_format;

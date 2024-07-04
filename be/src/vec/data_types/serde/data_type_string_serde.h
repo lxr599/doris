@@ -152,6 +152,7 @@ public:
     void row_codec_v2_serialize(const IColumn& column, int row_num, std::string* dst, int& size) const override {
         const auto& data_ref = column.get_data_at(row_num);
         size = data_ref.size;
+        // memcpy(dst, data_ref.data, size);
         dst->append(data_ref.data, data_ref.size);  // append string data
     }
 
