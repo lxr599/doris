@@ -19,7 +19,6 @@
 
 #include "common/logging.h"
 #include "common/status.h"
-#include "exec/exec_node.h"
 #include "pipeline/dependency.h"
 #include "pipeline/exec/aggregation_sink_operator.h"
 #include "pipeline/exec/aggregation_source_operator.h"
@@ -38,6 +37,7 @@
 #include "pipeline/exec/hashjoin_build_sink.h"
 #include "pipeline/exec/hashjoin_probe_operator.h"
 #include "pipeline/exec/hive_table_sink_operator.h"
+#include "pipeline/exec/iceberg_table_sink_operator.h"
 #include "pipeline/exec/jdbc_scan_operator.h"
 #include "pipeline/exec/jdbc_table_sink_operator.h"
 #include "pipeline/exec/memory_scratch_sink_operator.h"
@@ -96,12 +96,22 @@ Status OperatorBase::close(RuntimeState* state) {
 
 template <typename SharedStateArg>
 std::string PipelineXLocalState<SharedStateArg>::name_suffix() const {
-    return " (id=" + std::to_string(_parent->node_id()) + ")";
+    return " (id=" + std::to_string(_parent->node_id()) + [&]() -> std::string {
+        if (_parent->nereids_id() == -1) {
+            return "";
+        }
+        return " , nereids_id=" + std::to_string(_parent->nereids_id());
+    }() + ")";
 }
 
 template <typename SharedStateArg>
 std::string PipelineXSinkLocalState<SharedStateArg>::name_suffix() {
-    return " (id=" + std::to_string(_parent->node_id()) + ")";
+    return " (id=" + std::to_string(_parent->node_id()) + [&]() -> std::string {
+        if (_parent->nereids_id() == -1) {
+            return "";
+        }
+        return " , nereids_id=" + std::to_string(_parent->nereids_id());
+    }() + ")";
 }
 
 DataDistribution DataSinkOperatorXBase::required_data_distribution() const {
@@ -140,6 +150,7 @@ std::string OperatorXBase::debug_string(RuntimeState* state, int indentation_lev
 
 Status OperatorXBase::init(const TPlanNode& tnode, RuntimeState* /*state*/) {
     std::string node_name = print_plan_node_type(tnode.node_type);
+    _nereids_id = tnode.nereids_id;
     if (!tnode.intermediate_output_tuple_id_list.empty()) {
         if (!tnode.__isset.output_tuple_id) {
             return Status::InternalError("no final output tuple id");
@@ -299,11 +310,24 @@ Status OperatorXBase::do_projections(RuntimeState* state, vectorized::Block* ori
 
 Status OperatorXBase::get_block_after_projects(RuntimeState* state, vectorized::Block* block,
                                                bool* eos) {
-    auto local_state = state->get_local_state(operator_id());
+    DBUG_EXECUTE_IF("Pipeline::return_empty_block", {
+        if (this->_op_name == "AGGREGATION_OPERATOR" || this->_op_name == "HASH_JOIN_OPERATOR" ||
+            this->_op_name == "PARTITIONED_AGGREGATION_OPERATOR" ||
+            this->_op_name == "PARTITIONED_HASH_JOIN_OPERATOR" ||
+            this->_op_name == "CROSS_JOIN_OPERATOR" || this->_op_name == "SORT_OPERATOR") {
+            if (_debug_point_count++ % 2 == 0) {
+                return Status::OK();
+            }
+        }
+    });
+
+    auto* local_state = state->get_local_state(operator_id());
     if (_output_row_descriptor) {
         local_state->clear_origin_block();
         auto status = get_block(state, &local_state->_origin_block, eos);
-        if (UNLIKELY(!status.ok())) return status;
+        if (UNLIKELY(!status.ok())) {
+            return status;
+        }
         return do_projections(state, &local_state->_origin_block, block);
     }
     local_state->_peak_memory_usage_counter->set(local_state->_mem_tracker->peak_consumption());
@@ -352,9 +376,8 @@ Status DataSinkOperatorXBase::init(const TDataSink& tsink) {
 
 Status DataSinkOperatorXBase::init(const TPlanNode& tnode, RuntimeState* state) {
     std::string op_name = print_plan_node_type(tnode.node_type);
-
+    _nereids_id = tnode.nereids_id;
     auto substr = op_name.substr(0, op_name.find("_NODE"));
-
     _name = substr + "_SINK_OPERATOR";
     return Status::OK();
 }
@@ -378,8 +401,7 @@ std::shared_ptr<BasicSharedState> DataSinkOperatorX<LocalStateType>::create_shar
         LOG(FATAL) << "should not reach here!";
         return nullptr;
     } else {
-        std::shared_ptr<BasicSharedState> ss = nullptr;
-        ss = LocalStateType::SharedStateType::create_shared();
+        auto ss = LocalStateType::SharedStateType::create_shared();
         ss->id = operator_id();
         for (auto& dest : dests_id()) {
             ss->related_op_ids.insert(dest);
@@ -489,6 +511,11 @@ Status PipelineXLocalState<SharedStateArg>::close(RuntimeState* state) {
         _peak_memory_usage_counter->set(_mem_tracker->peak_consumption());
     }
     _closed = true;
+    // Some kinds of source operators has a 1-1 relationship with a sink operator (such as AnalyticOperator).
+    // We must ensure AnalyticSinkOperator will not be blocked if AnalyticSourceOperator already closed.
+    if (_shared_state && _shared_state->sink_deps.size() == 1) {
+        _shared_state->sink_deps.front()->set_always_ready();
+    }
     return Status::OK();
 }
 
@@ -651,6 +678,7 @@ DECLARE_OPERATOR_X(ResultFileSinkLocalState)
 DECLARE_OPERATOR_X(OlapTableSinkLocalState)
 DECLARE_OPERATOR_X(OlapTableSinkV2LocalState)
 DECLARE_OPERATOR_X(HiveTableSinkLocalState)
+DECLARE_OPERATOR_X(IcebergTableSinkLocalState)
 DECLARE_OPERATOR_X(AnalyticSinkLocalState)
 DECLARE_OPERATOR_X(SortSinkLocalState)
 DECLARE_OPERATOR_X(SpillSortSinkLocalState)
@@ -750,5 +778,6 @@ template class AsyncWriterSink<doris::vectorized::VJdbcTableWriter, JdbcTableSin
 template class AsyncWriterSink<doris::vectorized::VTabletWriter, OlapTableSinkOperatorX>;
 template class AsyncWriterSink<doris::vectorized::VTabletWriterV2, OlapTableSinkV2OperatorX>;
 template class AsyncWriterSink<doris::vectorized::VHiveTableWriter, HiveTableSinkOperatorX>;
+template class AsyncWriterSink<doris::vectorized::VIcebergTableWriter, IcebergTableSinkOperatorX>;
 
 } // namespace doris::pipeline

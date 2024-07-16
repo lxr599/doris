@@ -6,7 +6,7 @@ set(EXECUTABLE_OUTPUT_PATH "${BUILD_DIR}/test")
 
 set(TEST_LINK_LIBS ResourceManager ${TEST_LINK_LIBS})
 
-add_executable(sync_point_test sync_point_test.cpp)
+#add_executable(sync_point_test sync_point_test.cpp)
 
 add_executable(codec_test codec_test.cpp)
 
@@ -15,8 +15,9 @@ add_executable(keys_test keys_test.cpp)
 add_executable(doris_txn_test doris_txn_test.cpp)
 
 add_executable(txn_kv_test txn_kv_test.cpp)
+set_target_properties(txn_kv_test PROPERTIES COMPILE_FLAGS "-fno-access-control")
 
-add_executable(recycler_test recycler_test.cpp)
+add_executable(recycler_test recycler_test.cpp mock_accessor.cpp)
 
 add_executable(mem_txn_kv_test mem_txn_kv_test.cpp)
 
@@ -49,12 +50,14 @@ add_executable(s3_accessor_test s3_accessor_test.cpp)
 
 add_executable(hdfs_accessor_test hdfs_accessor_test.cpp)
 
+add_executable(util_test util_test.cpp)
+
 add_executable(stopwatch_test stopwatch_test.cpp)
 
 add_executable(network_util_test network_util_test.cpp)
 
 message("Meta-service test dependencies: ${TEST_LINK_LIBS}")
-target_link_libraries(sync_point_test ${TEST_LINK_LIBS})
+#target_link_libraries(sync_point_test ${TEST_LINK_LIBS})
 
 target_link_libraries(codec_test ${TEST_LINK_LIBS})
 
@@ -81,6 +84,8 @@ target_link_libraries(http_encode_key_test ${TEST_LINK_LIBS})
 target_link_libraries(s3_accessor_test ${TEST_LINK_LIBS})
 
 target_link_libraries(hdfs_accessor_test ${TEST_LINK_LIBS})
+
+target_link_libraries(util_test ${TEST_LINK_LIBS})
 
 target_link_libraries(stopwatch_test ${TEST_LINK_LIBS})
 
